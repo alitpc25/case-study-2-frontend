@@ -1,12 +1,10 @@
-export default class News {
-    id: string | undefined;
+export default class NewsSchema {
     topic: string | undefined;
     content: string | undefined;
-    expirationDate: string | undefined;
+    expirationDate: Date | undefined;
     link: string | undefined;
 
-    constructor(id: string, topic: string, content: string, expirationDate: string, link: string) {
-        this.id = id;
+    constructor(topic: string, content: string, expirationDate: Date, link: string) {
         this.topic = topic;
         this.content = content;
         this.expirationDate = expirationDate;

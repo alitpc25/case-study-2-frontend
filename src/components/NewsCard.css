@@ -1,0 +1,16 @@
+.news-card-container {
+    max-width: 1200px;
+    background: white;
+    box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.2), 0 6px 20px 0 rgba(0, 0, 0, 0.19);
+    text-align: center;
+    padding: 2vw;
+    margin: 2vw auto;
+}
+
+.news-card-container p {
+    text-align: left;
+}
+
+.news-card-container div {
+    margin-top: 20px;
+}

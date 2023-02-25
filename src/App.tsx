@@ -10,6 +10,7 @@ import AnnouncementsPage from './pages/AnnouncementsPage';
 import AdminLoginPage from './pages/AdminLoginPage';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import "./App.css"
 
 function App() {
 

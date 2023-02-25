@@ -27,3 +27,17 @@ export const toastError = (message: string) => {
         theme: "light",
     });
 }
+
+export const toastInfo = (message: string) => {
+    return toast.info(message, {
+        toastId: "errorToastId",
+        position: "top-right",
+        autoClose: 1500,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+        progress: undefined,
+        theme: "light",
+    });
+}

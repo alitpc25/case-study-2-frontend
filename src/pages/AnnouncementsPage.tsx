@@ -7,27 +7,31 @@ import AnnouncementCard from '../components/AnnouncementCard';
 import { Modal, Button } from 'react-bootstrap';
 import { ErrorMessage, Field, Formik, Form } from 'formik';
 import MyDatePicker from '../components/MyDatePicker';
-import { toastError, toastSuccess } from '../utils/toastMessages';
+import { toastError, toastInfo, toastSuccess } from '../utils/toastMessages';
 import { CreateAnnouncementSchema, UpdateAnnouncementSchema } from '../utils/yupSchemas';
 import AnnouncementSchema from '../utils/AnnouncementSchema';
+import NavbarComponent from '../components/NavbarComponent';
+import "./AnnouncementsPage.css";
+import { over, Client, Message } from 'stompjs';
+import SockJS from 'sockjs-client';
 
 export interface IAnnouncementsPageProps {
 }
+
+var stompClient: Client;
 
 export default function AnnouncementsPage(props: IAnnouncementsPageProps) {
 
   const admin = useAppSelector(state => state.admin);
   const dispatch = useAppDispatch();
 
-  const [announcementList, setAnnouncementList] = useState<Announcement[]>()
+  const [announcementList, setAnnouncementList] = useState<Announcement[]>([])
 
   const getAllAnnouncements = () => {
     axios.get(`/api/v1/announcement`)
       .then((res) => {
-        console.log(res.data)
         setAnnouncementList(res.data)
       }).catch((e) => {
-        console.log(e);
         if (e.response.status === 403) {
           dispatch(updateAdminInfo({
             jwtToken: null,
@@ -42,6 +46,12 @@ export default function AnnouncementsPage(props: IAnnouncementsPageProps) {
     getAllAnnouncements();
     setIsAnnouncementsChanged(false)
   }, [isAnnouncementsChanged])
+
+  useEffect(() => {
+    if (typeof(stompClient) === 'undefined') {
+      connect()
+    }
+  })
 
   //Modals
   const [selectedAnnouncement, setSelectedAnnouncement] = useState<Announcement>();
@@ -69,12 +79,32 @@ export default function AnnouncementsPage(props: IAnnouncementsPageProps) {
     setShowInsertModal(true);
   }
 
-  const initialValuesAnnouncement = {
-    topic: selectedAnnouncement?.topic,
-    content: selectedAnnouncement?.content,
-    expirationDate: selectedAnnouncement?.expirationDate ? new Date(selectedAnnouncement.expirationDate) : new Date(),
-    image: undefined // new File(selectedAnnouncement?.image)
-  };
+  const handleDeleteAnnouncement = (announcementId: string | undefined) => {
+    if (announcementId) {
+      axios.delete('/api/v1/announcement/' + announcementId, {
+        headers: {
+          'Authorization': `Bearer ${admin.jwtToken}`,
+          "Content-Type": "multipart/form-data",
+        }
+      })
+        .then(function (response) {
+          toastSuccess(response.data);
+          handleCloseDeleteModal()
+        })
+        .catch(function (e) {
+          toastError(e.response.data);
+          console.log(e)
+          if (e.response.status === 401) {
+            dispatch(updateAdminInfo({
+              jwtToken: null,
+            }))
+          }
+        })
+        .finally(() => {
+          setIsAnnouncementsChanged(true)
+        })
+    }
+  }
 
   const initialValuesAnnouncementSave = {
     topic: "",
@@ -82,22 +112,6 @@ export default function AnnouncementsPage(props: IAnnouncementsPageProps) {
     expirationDate: new Date(),
     image: undefined
   };
-
-  const handleDeleteAnnouncement = (announcementId: string | undefined) => {
-    if (announcementId) {
-      axios.delete('/api/v1/announcement/' + announcementId)
-        .then(function (response) {
-          toastSuccess(response.data);
-          handleCloseDeleteModal()
-        })
-        .catch(function (error) {
-          toastError(error.response.data);
-        })
-        .finally(() => {
-          setIsAnnouncementsChanged(true)
-        })
-    }
-  }
 
   const saveAnnouncement = (values: AnnouncementSchema) => {
     axios.post('/api/v1/announcement',
@@ -117,31 +131,57 @@ export default function AnnouncementsPage(props: IAnnouncementsPageProps) {
         handleCloseInsertModal();
         setImagePreview("")
         toastSuccess("Announcement successfully added.");
+        sendNotification(response.data.id)
       })
       .catch(function (error) {
         console.log(error)
         toastError(error.response.data);
+        if (error.response.status === 401) {
+          dispatch(updateAdminInfo({
+            jwtToken: null,
+          }))
+        }
       })
       .finally(() => {
         setIsAnnouncementsChanged(true)
       })
   }
 
+  const initialValuesAnnouncement = {
+    topic: selectedAnnouncement?.topic,
+    content: selectedAnnouncement?.content,
+    expirationDate: selectedAnnouncement?.expirationDate ? new Date(selectedAnnouncement?.expirationDate) : new Date(),
+    image: undefined // new File(selectedAnnouncement?.image)
+  };
+
   const updateAnnouncement = (values: AnnouncementSchema) => {
     if (selectedAnnouncement) {
       axios.patch('/api/v1/announcement/' + selectedAnnouncement.id,
-        values,
+        {
+          topic: values.topic,
+          content: values.content,
+          expirationDate: values.expirationDate,
+          image: values.image
+        },
         {
           headers: {
             'Authorization': `Bearer ${admin.jwtToken}`,
+            "Content-Type": "multipart/form-data",
           }
         })
         .then(function (response) {
           handleCloseEditModal();
-          toastSuccess("Interaction info successfully updated.");
+          setImagePreview("")
+          toastSuccess("Announcement successfully updated.");
         })
         .catch(function (error) {
           toastError(error.response.data)
+          console.log(error)
+          if (error.response.status === 401) {
+            dispatch(updateAdminInfo({
+              jwtToken: null,
+            }))
+          }
         })
         .finally(() => {
           setIsAnnouncementsChanged(true)
@@ -155,26 +195,53 @@ export default function AnnouncementsPage(props: IAnnouncementsPageProps) {
     setImagePreview(URL.createObjectURL(image))
   }
 
+  //Websocket.
+  const connect = () => {
+    let socket = new SockJS('http://localhost:4000/notify');
+    stompClient = over(socket);
+    stompClient.debug = function () { };//do nothing
+    stompClient.connect({}, function () {
+      stompClient.subscribe('/topic/newNotifications', function (notificationResponse: Message) {
+        showNotificationResponse(JSON.parse(notificationResponse.body));
+      });
+    });
+  }
+
+  function showNotificationResponse(newAnnouncement: Announcement) {
+      setAnnouncementList(prev => [...prev, newAnnouncement]);
+      if(admin.jwtToken === null) {
+        toastInfo("New announcement published.");
+      }
+  }
+
+  function sendNotification(announcementId: string) {
+    stompClient.send("/app/notify", {}, announcementId);
+  }
+
   return (
     <div>
-      <div>
-        <button className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded" onClick={handleShowInserttModal}>
-          Insert
-        </button>
-      </div>
-      {
-        announcementList?.map(announcement => {
-          return (
-            <div>
-              <AnnouncementCard announcement={announcement}></AnnouncementCard>
+      <NavbarComponent />
+      <div className='announcement-container'>
+        <div>
+          {
+            admin.jwtToken ?
+              <button type="button" className="btn btn-primary" onClick={handleShowInserttModal}>
+                Create Announcement
+              </button>
+              : null
+          }
+
+        </div>
+        {
+          announcementList?.map(announcement => {
+            return (
               <div>
-                <button onClick={(event) => handleShowEditModal(event, announcement)} type="button" className="btn btn-primary">Edit</button>
-                <button onClick={(event) => handleShowDeleteModal(event, announcement)} type="button" className="btn btn-danger">Delete</button>
+                <AnnouncementCard announcement={announcement} handleShowEditModal={handleShowEditModal} handleShowDeleteModal={handleShowDeleteModal}></AnnouncementCard>
               </div>
-            </div>
-          )
-        })
-      }
+            )
+          })
+        }
+      </div>
       <div>
         <Modal centered show={showInsertModal} onHide={handleCloseInsertModal}>
           <Modal.Header closeButton>
@@ -200,14 +267,14 @@ export default function AnnouncementsPage(props: IAnnouncementsPageProps) {
                   <div className=''>
                     <label htmlFor="content">Content</label>
                     <div className='p-2'>
-                      <Field type="textarea" name="content" className='form-control' />
+                      <Field component="textarea" type="textarea" name="content" className='form-control' />
                       <ErrorMessage name="content" component="div" />
                     </div>
                   </div>
                   <div className=''>
-                    <label htmlFor="date">Expiration Date</label>
+                    <label htmlFor="expirationDate">Expiration Date</label>
                     <div className='p-2'>
-                      <MyDatePicker name="date" />
+                      <MyDatePicker name="expirationDate" />
                     </div>
                   </div>
                   <div className="">
@@ -217,11 +284,11 @@ export default function AnnouncementsPage(props: IAnnouncementsPageProps) {
                         setFieldValue("image", event.currentTarget.files[0])
                         handleImagePreview(event.currentTarget.files[0])
                       };
-                    }} className="form-control" />
+                    }} className="form-control image-input" />
                     {
-                      imagePreview ? 
-                        <img width={"400px"} src={imagePreview}></img>
-                      : null
+                      imagePreview ?
+                        <img className="image-preview" width={"400px"} src={imagePreview}></img>
+                        : null
                     }
                   </div>
                   <div className="d-flex justify-content-around">
@@ -266,49 +333,49 @@ export default function AnnouncementsPage(props: IAnnouncementsPageProps) {
             >
               {({ setFieldValue }) => (
                 <Form className=''>
-                <div className=''>
-                  <label htmlFor="topic">Topic</label>
-                  <div className='p-2'>
-                    <Field type="text" name="topic" className='form-control' />
-                    <ErrorMessage name="topic" component="div" />
+                  <div className=''>
+                    <label htmlFor="topic">Topic</label>
+                    <div className='p-2'>
+                      <Field type="text" name="topic" className='form-control' />
+                      <ErrorMessage name="topic" component="div" />
+                    </div>
                   </div>
-                </div>
-                <div className=''>
-                  <label htmlFor="content">Content</label>
-                  <div className='p-2'>
-                    <Field type="textarea" name="content" className='form-control' />
-                    <ErrorMessage name="content" component="div" />
+                  <div className=''>
+                    <label htmlFor="content">Content</label>
+                    <div className='p-2'>
+                      <Field component="textarea" type="textarea" name="content" className='form-control' />
+                      <ErrorMessage name="content" component="div" />
+                    </div>
                   </div>
-                </div>
-                <div className=''>
-                  <label htmlFor="date">Expiration Date</label>
-                  <div className='p-2'>
-                    <MyDatePicker name="date" />
+                  <div className=''>
+                    <label htmlFor="expirationDate">Expiration Date</label>
+                    <div className='p-2'>
+                      <MyDatePicker name="expirationDate" />
+                    </div>
                   </div>
-                </div>
-                <div className="">
-                  <label htmlFor="file">Image</label>
-                  <input id="file" name="file" type="file" onChange={(event) => {
-                    if (event.currentTarget.files) {
-                      setFieldValue("image", event.currentTarget.files[0])
-                      handleImagePreview(event.currentTarget.files[0])
-                    };
-                  }} className="form-control" />
-                  {
-                    imagePreview ? 
-                      <img width={"400px"} src={imagePreview}></img>
-                    : null
-                  }
-                </div>
-                <div className="d-flex justify-content-around">
-                  <Button variant="secondary" onClick={handleCloseInsertModal}>
-                    Close
-                  </Button>
-                  <Button variant="primary" type="submit">
-                    Update Announcement
-                  </Button>
-                </div>
-              </Form>
+                  <div className="">
+                    <label htmlFor="file">Image</label>
+                    <input id="file" name="file" type="file" onChange={(event) => {
+                      if (event.currentTarget.files) {
+                        setFieldValue("image", event.currentTarget.files[0])
+                        handleImagePreview(event.currentTarget.files[0])
+                      };
+                    }} className="form-control" />
+                    {
+                      imagePreview ?
+                        <img className="image-preview" width={"400px"} src={imagePreview}></img>
+                        : null
+                    }
+                  </div>
+                  <div className="d-flex justify-content-around">
+                    <Button variant="secondary" onClick={handleCloseInsertModal}>
+                      Close
+                    </Button>
+                    <Button variant="primary" type="submit">
+                      Update Announcement
+                    </Button>
+                  </div>
+                </Form>
               )}
             </Formik>
           </Modal.Body>
