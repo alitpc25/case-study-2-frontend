@@ -3,6 +3,7 @@ import { useAppDispatch } from '../redux/hooks';
 import axios from 'axios';
 import { updateAdminInfo } from '../redux/adminSlice';
 import "./AdminLoginPage.css"
+import { toastError } from '../utils/toastMessages';
 
 export interface IAdminLoginPageProps {
 }
@@ -33,6 +34,7 @@ export default function AdminLoginPage(props: IAdminLoginPageProps) {
             })
             .catch(function (error) {
                 console.log(error);
+                toastError(error.response.data)
             });
     }
 

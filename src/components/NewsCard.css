@@ -14,3 +14,9 @@
 .news-card-container div {
     margin-top: 20px;
 }
+
+.news-card-container a span {
+    cursor:pointer;
+    color:blue;
+    text-decoration:underline;
+}

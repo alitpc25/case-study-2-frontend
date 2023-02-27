@@ -32,10 +32,11 @@ export default function AnnouncementsPage(props: IAnnouncementsPageProps) {
       .then((res) => {
         setAnnouncementList(res.data)
       }).catch((e) => {
-        if (e.response.status === 403) {
+        if (e.response.status === 401 && admin.jwtToken) {
           dispatch(updateAdminInfo({
             jwtToken: null,
           }))
+          toastSuccess("Logged out.")
         }
       })
   }
@@ -93,11 +94,12 @@ export default function AnnouncementsPage(props: IAnnouncementsPageProps) {
         })
         .catch(function (e) {
           toastError(e.response.data);
-          console.log(e)
-          if (e.response.status === 401) {
+          console.log(e.response.status)
+          if (e.response.status === 401 && admin.jwtToken) {
             dispatch(updateAdminInfo({
               jwtToken: null,
             }))
+            toastSuccess("Logged out.")
           }
         })
         .finally(() => {
@@ -136,10 +138,11 @@ export default function AnnouncementsPage(props: IAnnouncementsPageProps) {
       .catch(function (error) {
         console.log(error)
         toastError(error.response.data);
-        if (error.response.status === 401) {
+        if (error.response.status === 401 && admin.jwtToken) {
           dispatch(updateAdminInfo({
             jwtToken: null,
           }))
+          toastSuccess("Logged out.")
         }
       })
       .finally(() => {
@@ -150,7 +153,7 @@ export default function AnnouncementsPage(props: IAnnouncementsPageProps) {
   const initialValuesAnnouncement = {
     topic: selectedAnnouncement?.topic,
     content: selectedAnnouncement?.content,
-    expirationDate: selectedAnnouncement?.expirationDate ? new Date(selectedAnnouncement?.expirationDate) : new Date(),
+    expirationDate: selectedAnnouncement?.expirationDate ? new Date(selectedAnnouncement?.expirationDate + "Z") : new Date(),
     image: undefined // new File(selectedAnnouncement?.image)
   };
 
@@ -177,10 +180,11 @@ export default function AnnouncementsPage(props: IAnnouncementsPageProps) {
         .catch(function (error) {
           toastError(error.response.data)
           console.log(error)
-          if (error.response.status === 401) {
+          if (error.response.status === 401 && admin.jwtToken) {
             dispatch(updateAdminInfo({
               jwtToken: null,
             }))
+            toastSuccess("Logged out.")
           }
         })
         .finally(() => {
@@ -208,7 +212,7 @@ export default function AnnouncementsPage(props: IAnnouncementsPageProps) {
   }
 
   function showNotificationResponse(newAnnouncement: Announcement) {
-      setAnnouncementList(prev => [...prev, newAnnouncement]);
+      setAnnouncementList(prev => [newAnnouncement, ...prev]);
       if(admin.jwtToken === null) {
         toastInfo("New announcement published.");
       }
@@ -233,9 +237,9 @@ export default function AnnouncementsPage(props: IAnnouncementsPageProps) {
 
         </div>
         {
-          announcementList?.map(announcement => {
+          announcementList?.map((announcement, i) => {
             return (
-              <div>
+              <div key={i}>
                 <AnnouncementCard announcement={announcement} handleShowEditModal={handleShowEditModal} handleShowDeleteModal={handleShowDeleteModal}></AnnouncementCard>
               </div>
             )
@@ -284,7 +288,7 @@ export default function AnnouncementsPage(props: IAnnouncementsPageProps) {
                         setFieldValue("image", event.currentTarget.files[0])
                         handleImagePreview(event.currentTarget.files[0])
                       };
-                    }} className="form-control image-input" />
+                    }} className="form-control image-input" required/>
                     {
                       imagePreview ?
                         <img className="image-preview" width={"400px"} src={imagePreview}></img>
@@ -360,7 +364,7 @@ export default function AnnouncementsPage(props: IAnnouncementsPageProps) {
                         setFieldValue("image", event.currentTarget.files[0])
                         handleImagePreview(event.currentTarget.files[0])
                       };
-                    }} className="form-control" />
+                    }} className="form-control" required/>
                     {
                       imagePreview ?
                         <img className="image-preview" width={"400px"} src={imagePreview}></img>

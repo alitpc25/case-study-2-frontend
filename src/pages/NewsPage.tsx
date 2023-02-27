@@ -27,11 +27,12 @@ export default function NewsPage(props: INewsPageProps) {
             .then((res) => {
                 setNewsList(res.data)
             }).catch((e) => {
-                if (e.response.status === 403) {
+                if (e.response.status === 401 && admin.jwtToken) {
                     dispatch(updateAdminInfo({
-                        jwtToken: null,
+                      jwtToken: null,
                     }))
-                }
+                    toastSuccess("Logged out.")
+                  }
             })
     }
 
@@ -48,11 +49,13 @@ export default function NewsPage(props: INewsPageProps) {
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [showEditModal, setShowEditModal] = useState(false);
     const [showInsertModal, setShowInsertModal] = useState(false);
+    const [showDetailsModal, setShowDetailsModal] = useState(false);
 
     //Modal open-close control
     const handleCloseDeleteModal = () => setShowDeleteModal(false);
     const handleCloseEditModal = () => setShowEditModal(false);
     const handleCloseInsertModal = () => setShowInsertModal(false);
+    const handleCloseDetailsModal = () => setShowDetailsModal(false);
 
     const handleShowDeleteModal = (event: React.MouseEvent<HTMLButtonElement, MouseEvent>, news: News) => {
         setSelectedNews(news)
@@ -66,6 +69,11 @@ export default function NewsPage(props: INewsPageProps) {
 
     const handleShowInserttModal = (event: React.MouseEvent<HTMLButtonElement, MouseEvent>) => {
         setShowInsertModal(true);
+    }
+
+    const handleShowDetailsModal = (event: React.MouseEvent<HTMLAnchorElement, MouseEvent>, news: News) => {
+        setSelectedNews(news)
+        setShowDetailsModal(true)
     }
 
     const handleDeleteNews = (newsId: string | undefined) => {
@@ -121,11 +129,12 @@ export default function NewsPage(props: INewsPageProps) {
             .catch(function (error) {
                 console.log(error)
                 toastError(error.response.data);
-                if (error.response.status === 401) {
+                if (error.response.status === 401 && admin.jwtToken) {
                     dispatch(updateAdminInfo({
-                        jwtToken: null,
+                      jwtToken: null,
                     }))
-                }
+                    toastSuccess("Logged out.")
+                  }
             })
             .finally(() => {
                 setIsNewsChanged(true)
@@ -135,7 +144,7 @@ export default function NewsPage(props: INewsPageProps) {
     const initialValuesNews = {
         topic: selectedNews?.topic,
         content: selectedNews?.content,
-        expirationDate: selectedNews?.expirationDate ? new Date(selectedNews?.expirationDate) : new Date(),
+        expirationDate: selectedNews?.expirationDate ? new Date(selectedNews?.expirationDate + "Z") : new Date(),
         link: selectedNews?.link
     };
 
@@ -160,11 +169,12 @@ export default function NewsPage(props: INewsPageProps) {
                 .catch(function (error) {
                     toastError(error.response.data)
                     console.log(error)
-                    if (error.response.status === 401) {
+                    if (error.response.status === 401 && admin.jwtToken) {
                         dispatch(updateAdminInfo({
-                            jwtToken: null,
+                          jwtToken: null,
                         }))
-                    }
+                        toastSuccess("Logged out.")
+                      }
                 })
                 .finally(() => {
                     setIsNewsChanged(true)
@@ -186,10 +196,10 @@ export default function NewsPage(props: INewsPageProps) {
                     }
                 </div>
                 {
-                    newsList?.map(news => {
+                    newsList?.map((news, i) => {
                         return (
-                            <div>
-                                <NewsCard news={news} handleShowDeleteModal={handleShowDeleteModal} handleShowEditModal={handleShowEditModal}></NewsCard>
+                            <div key={i}>
+                                <NewsCard news={news} handleShowDeleteModal={handleShowDeleteModal} handleShowEditModal={handleShowEditModal} handleShowDetailsModal={handleShowDetailsModal} showContentDetail={false}></NewsCard>
                             </div>
                         )
                     })
@@ -263,6 +273,14 @@ export default function NewsPage(props: INewsPageProps) {
                             Remove
                         </Button>
                     </Modal.Footer>
+                </Modal>
+
+                <Modal centered show={showDetailsModal} onHide={handleCloseDetailsModal} className="modal-xl">
+                    <Modal.Header closeButton>
+                    </Modal.Header>
+                    <Modal.Body>
+                    <NewsCard news={selectedNews!} handleShowDeleteModal={handleShowDeleteModal} handleShowEditModal={handleShowEditModal} handleShowDetailsModal={handleShowDetailsModal} showContentDetail={true}></NewsCard>
+                    </Modal.Body>
                 </Modal>
 
                 <Modal centered show={showEditModal} onHide={handleCloseEditModal} className="modal-lg">
